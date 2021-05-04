@@ -1,0 +1,8 @@
+host:
+  baseurl: https://taschool-notes-service.herokuapp.com
+  access-token-uri: ${host.baseurl}/oauth/token
+  client-id: test
+  client-secret: secret
+  scope:
+    read
+    write
