@@ -5,43 +5,40 @@ import java.util.List;
 import feign.FeignException;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
-import org.junit.platform.runner.JUnitPlatform;
-import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 import com.playtika.automation.school.test.framework.demo.action.AuthenticatedFeignClientActions;
-import com.playtika.automation.school.test.framework.demo.action.ServiceFeignClientActions;
+import com.playtika.automation.school.test.framework.demo.action.LoginFeignClientActions;
 import com.playtika.automation.school.test.framework.demo.configuration.AuthenticatedFeignClientActionsConfiguration;
-import com.playtika.automation.school.test.framework.demo.configuration.ServiceFeignClientActionsConfiguration;
+import com.playtika.automation.school.test.framework.demo.configuration.LoginFeignClientActionsConfiguration;
 import com.playtika.automation.school.test.framework.demo.configuration.UserConfiguration;
 import com.playtika.automation.school.test.framework.demo.pojo.Note;
 import com.playtika.automation.school.test.framework.demo.pojo.RegistrationResponse;
 import com.playtika.automation.school.test.framework.demo.pojo.User;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 
 @SpringBootApplication
 @EnableFeignClients
 @SpringBootTest(classes = {
         UserConfiguration.class,
-        ServiceFeignClientActionsConfiguration.class,
+        LoginFeignClientActionsConfiguration.class,
         AuthenticatedFeignClientActionsConfiguration.class
 })
-@RunWith(JUnitPlatform.class)
 class DemoApplicationTests {
 
-    public static Integer noteCounter = 0;
+    private Integer noteCounter = 0;
     //1. Generate new user
     @Autowired
     private User user;
 
     @Autowired
-    private ServiceFeignClientActions serviceFeignClientActions;
+    private LoginFeignClientActions loginFeignClientActions;
 
     @Autowired
     private AuthenticatedFeignClientActions authenticatedFeignClientActions;
@@ -49,64 +46,62 @@ class DemoApplicationTests {
     @Test
     void testingServiceTask() {
         //2. Register user
-        RegistrationResponse response = serviceFeignClientActions.registerUserAccount(user);
+        RegistrationResponse response = loginFeignClientActions.registerUserAccount(user);
         user.setId(response.getId());
         user.setRegisteredAt(response.getRegisteredAt());
         showUser();
         checkUserRegistration(response);
 
         //4. Create a note with any content
-        Note note1 = authenticatedFeignClientActions.createNote();
+        Note firstNote = authenticatedFeignClientActions.createNote();
         noteCounter++;
 
         //5. Get list of notes and assert it has size equals to one
-        List<Note> noteList = authenticatedFeignClientActions.getNotes();
-        assertThat(noteList).hasSize(1);
-        Integer listSize = noteList.size();
-        assertEquals(noteCounter, listSize,"Notes list length is not correct, you didn't create note");
+        List<Note> notesListAfterCreatingFirstNote = authenticatedFeignClientActions.getNotes();
+        assertThat(notesListAfterCreatingFirstNote).hasSize(noteCounter);
         System.out.println("Notes list after creating first note");
-        showNotes(noteList);
+        showNotes(notesListAfterCreatingFirstNote);
 
         //6. Create second note
-        Note note2 = authenticatedFeignClientActions.createNote();
+        Note secondNote = authenticatedFeignClientActions.createNote();
         noteCounter++;
 
         //7. Get list of notes and assert it size has grown
-        List<Note> noteListAfterCreatingSecondNote = authenticatedFeignClientActions.getNotes();
-        assertThat(noteListAfterCreatingSecondNote).hasSizeGreaterThan(noteList.size());
+        List<Note> notesListAfterCreatingSecondNote = authenticatedFeignClientActions.getNotes();
+        assertThat(notesListAfterCreatingSecondNote).hasSizeGreaterThan(notesListAfterCreatingFirstNote.size());
         System.out.println("Notes list after creating second note");
-        showNotes(noteListAfterCreatingSecondNote);
+        showNotes(notesListAfterCreatingSecondNote);
 
         //8. Get first note by id and assert it's the same as you've created
-        Note firstNoteToCompare = authenticatedFeignClientActions.getNote(note1);
-        checkNotesTheSame(note1, firstNoteToCompare);
+        Note firstNoteToCompare = authenticatedFeignClientActions.getNote(firstNote);
+        assertThat(firstNoteToCompare).isEqualTo(firstNote);
+        checkNotesTheSame(firstNoteToCompare, firstNote);
 
         //9. Update first note with any new content
-        Note updatedNote1 = authenticatedFeignClientActions.updateExistingNote(note1);
+        Note updatedFirstNote = authenticatedFeignClientActions.updateExistingNote(firstNote);
 
         //10. Get list of notes. Use stream to filter list by id of note and get updated one.
-        Note foundedNote = searchNoteInListById(updatedNote1);
+        Note foundedNote = searchNoteInListById(updatedFirstNote);
 
         //11. Check that updated note has the same id as first note
-        checkModifiedNote(note1, foundedNote);
+        checkModifiedNote(firstNote, foundedNote);
 
         //12. Delete first note
-        authenticatedFeignClientActions.deleteNote(note1);
+        authenticatedFeignClientActions.deleteNote(firstNote);
         noteCounter--;
 
         //13. Get list of notes and assert it has size equal to one and it doesn't contain deleted note
-        checkNoteListDidNotContainDeletedNote(note1);
+        checkNoteListDidNotContainDeletedNote(firstNote);
 
         //14. Try to get deleted note and assert that method throws error which contains message:
         // "Note with id [{your note id}] wasn't found"
-        checkGetDeletedNote(note1);
+        checkGetDeletedNote(firstNote);
 
         //15. Delete second note
-        authenticatedFeignClientActions.deleteNote(note2);
+        authenticatedFeignClientActions.deleteNote(secondNote);
         noteCounter--;
-        checkNoteListDidNotContainDeletedNote(note2);
-        checkGetDeletedNote(note2);
-
+        checkNoteListDidNotContainDeletedNote(secondNote);
+        checkGetDeletedNote(secondNote);
     }
 
     private void showUser() {
@@ -137,13 +132,13 @@ class DemoApplicationTests {
         }
     }
 
-    private void checkNotesTheSame(Note note1, Note note2) {
+    private void checkNotesTheSame(Note actualNote, Note expectedNote) {
         SoftAssertions softAssertions = new SoftAssertions();
-        softAssertions.assertThat(note1.getId()).isEqualTo(note2.getId());
-        softAssertions.assertThat(note1.getContent()).isEqualTo(note2.getContent());
-        softAssertions.assertThat(note1.getCreatedAt()).isEqualTo(note2.getCreatedAt());
-        softAssertions.assertThat(note1.getModifiedAt()).isEqualTo(note2.getModifiedAt());
-        softAssertions.assertThat(note1.getVersion()).isEqualTo(note2.getVersion());
+        softAssertions.assertThat(actualNote.getId()).isEqualTo(expectedNote.getId());
+        softAssertions.assertThat(actualNote.getContent()).isEqualTo(expectedNote.getContent());
+        softAssertions.assertThat(actualNote.getCreatedAt()).isEqualTo(expectedNote.getCreatedAt());
+        softAssertions.assertThat(actualNote.getModifiedAt()).isEqualTo(expectedNote.getModifiedAt());
+        softAssertions.assertThat(actualNote.getVersion()).isEqualTo(expectedNote.getVersion());
         softAssertions.assertAll();
 
     }
@@ -164,27 +159,24 @@ class DemoApplicationTests {
     }
 
     private Note searchNoteInListById(Note targetNote) {
-        List<Note> noteList = authenticatedFeignClientActions.getNotes();
-        return noteList.stream()
+        List<Note> notesList = authenticatedFeignClientActions.getNotes();
+        return notesList.stream()
                        .filter(note -> note.getId() != null && note.getId().equals(targetNote.getId()))
                        .findFirst()
                        .orElseThrow(() -> new RuntimeException("Note not found"));
     }
 
     private void checkNoteListDidNotContainDeletedNote(Note deletedNote) {
-        List<Note> noteList = authenticatedFeignClientActions.getNotes();
+        List<Note> notesList = authenticatedFeignClientActions.getNotes();
         SoftAssertions softAssertions = new SoftAssertions();
-        softAssertions.assertThat(noteList).hasSize(noteCounter);
-        softAssertions.assertThat(noteList).noneMatch(note -> note.getId().equals(deletedNote.getId()));
-        softAssertions.assertThat(noteList.stream().filter(note -> note.getId().equals(deletedNote.getId()))).isEmpty();
+        softAssertions.assertThat(notesList).hasSize(noteCounter);
+        softAssertions.assertThat(notesList).noneMatch(note -> note.getId().equals(deletedNote.getId()));
         softAssertions.assertAll();
     }
 
     private void checkGetDeletedNote(Note deletedNote) {
-        SoftAssertions softAssertions = new SoftAssertions();
-        softAssertions.assertThatThrownBy(() -> authenticatedFeignClientActions.getNote(deletedNote))
+        assertThatThrownBy(() -> authenticatedFeignClientActions.getNote(deletedNote))
                       .isInstanceOf(FeignException.FeignClientException.class)
                       .hasMessageContaining(String.format("Note with id [%d] wasn't found", deletedNote.getId()));
-        softAssertions.assertAll();
     }
 }

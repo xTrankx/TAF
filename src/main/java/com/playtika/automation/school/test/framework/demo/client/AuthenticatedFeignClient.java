@@ -13,7 +13,6 @@ import com.playtika.automation.school.test.framework.demo.configuration.Authenti
 import com.playtika.automation.school.test.framework.demo.pojo.Note;
 
 @FeignClient(
-        contextId = "authenticatedClientId",
         name = "authenticated-client",
         url = "${host.baseurl}",
         path = "/v1/notes",

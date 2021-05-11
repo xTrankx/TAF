@@ -1,6 +1,5 @@
 package com.playtika.automation.school.test.framework.demo.configuration;
 
-import java.util.Arrays;
 import java.util.List;
 
 import feign.RequestInterceptor;
